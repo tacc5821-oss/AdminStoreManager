@@ -1,4 +1,4 @@
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from typing import List, Dict
 
 class Keyboards:
@@ -6,25 +6,21 @@ class Keyboards:
     def admin_main_menu():
         """Main admin menu keyboard"""
         keyboard = [
-            [InlineKeyboardButton("➕ Add Item", callback_data="admin_add_item")],
-            [InlineKeyboardButton("📝 Manage Items", callback_data="admin_manage_items")],
-            [InlineKeyboardButton("👤 View Users", callback_data="admin_view_users")],
-            [InlineKeyboardButton("💰 Manage Coins", callback_data="admin_manage_coins")],
-            [InlineKeyboardButton("📦 View Orders", callback_data="admin_view_orders")],
-            [InlineKeyboardButton("🏷️ Add Coupon", callback_data="admin_add_coupon")],
-            [InlineKeyboardButton("🎫 Manage Coupons", callback_data="admin_manage_coupons")]
+            [KeyboardButton("➕ Add Item"), KeyboardButton("📝 Manage Items")],
+            [KeyboardButton("👤 View Users"), KeyboardButton("💰 Manage Coins")],
+            [KeyboardButton("📦 View Orders")],
+            [KeyboardButton("🏷️ Add Coupon"), KeyboardButton("🎫 Manage Coupons")]
         ]
-        return InlineKeyboardMarkup(keyboard)
+        return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
     
     @staticmethod
     def user_main_menu():
         """Main user menu keyboard"""
         keyboard = [
-            [InlineKeyboardButton("🛍️ Browse Items", callback_data="user_browse")],
-            [InlineKeyboardButton("💰 My Balance", callback_data="user_balance")],
-            [InlineKeyboardButton("📦 My Orders", callback_data="user_orders")]
+            [KeyboardButton("🛍️ Browse Items")],
+            [KeyboardButton("💰 My Balance"), KeyboardButton("📦 My Orders")]
         ]
-        return InlineKeyboardMarkup(keyboard)
+        return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
     
     @staticmethod
     def categories_menu(categories: List[str]):

@@ -15,7 +15,7 @@ class UserHandlers:
         text = "🎮 Welcome to Gaming Items Store!\n\nSelect an option:"
         
         if update.callback_query:
-            await update.callback_query.edit_message_text(
+            await update.callback_query.message.reply_text(
                 text=text,
                 reply_markup=self.keyboards.user_main_menu()
             )
@@ -260,4 +260,13 @@ You will be notified once it's processed."""
             else:
                 await update.message.reply_text("Please use the menu buttons or type /start")
         else:
-            await update.message.reply_text("Please use the menu buttons or type /start")
+            # Handle main menu button presses
+            text = update.message.text
+            if text == "🛍️ Browse Items":
+                await self.show_categories(update, context)
+            elif text == "💰 My Balance":
+                await self.show_balance(update, context)
+            elif text == "📦 My Orders":
+                await self.show_user_orders(update, context)
+            else:
+                await update.message.reply_text("Please use the menu buttons or type /start")

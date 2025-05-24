@@ -15,7 +15,7 @@ class AdminHandlers:
         text = "🔧 Admin Panel\n\nSelect an option:"
         
         if update.callback_query:
-            await update.callback_query.edit_message_text(
+            await update.callback_query.message.reply_text(
                 text=text,
                 reply_markup=self.keyboards.admin_main_menu()
             )
@@ -704,4 +704,21 @@ This action cannot be undone!"""
             elif state['action'] == 'edit_coupon_discount':
                 await self.handle_edit_coupon(update, context)
         else:
-            await update.message.reply_text("Please use the menu buttons or type /start")
+            # Handle main menu button presses
+            text = update.message.text
+            if text == "➕ Add Item":
+                await self.start_add_item_flow(update, context)
+            elif text == "📝 Manage Items":
+                await self.show_items_management(update, context)
+            elif text == "👤 View Users":
+                await self.show_users_list(update, context)
+            elif text == "💰 Manage Coins":
+                await self.show_users_list(update, context)
+            elif text == "📦 View Orders":
+                await self.show_pending_orders(update, context)
+            elif text == "🏷️ Add Coupon":
+                await self.start_add_coupon_flow(update, context)
+            elif text == "🎫 Manage Coupons":
+                await self.show_coupons_management(update, context)
+            else:
+                await update.message.reply_text("Please use the menu buttons or type /start")
