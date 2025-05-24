@@ -11,7 +11,8 @@ class Keyboards:
             [InlineKeyboardButton("👤 View Users", callback_data="admin_view_users")],
             [InlineKeyboardButton("💰 Manage Coins", callback_data="admin_manage_coins")],
             [InlineKeyboardButton("📦 View Orders", callback_data="admin_view_orders")],
-            [InlineKeyboardButton("🏷️ Add Coupon", callback_data="admin_add_coupon")]
+            [InlineKeyboardButton("🏷️ Add Coupon", callback_data="admin_add_coupon")],
+            [InlineKeyboardButton("🎫 Manage Coupons", callback_data="admin_manage_coupons")]
         ]
         return InlineKeyboardMarkup(keyboard)
     
@@ -145,5 +146,36 @@ class Keyboards:
         keyboard = [
             [InlineKeyboardButton("✅ Yes, Delete", callback_data=f"admin_confirm_delete_{item_id}")],
             [InlineKeyboardButton("❌ Cancel", callback_data=f"admin_item_{item_id}")],
+        ]
+        return InlineKeyboardMarkup(keyboard)
+    
+    @staticmethod
+    def coupons_management_menu(coupons: Dict):
+        """Coupons management keyboard for admin"""
+        keyboard = []
+        for code, coupon in coupons.items():
+            discount = coupon.get('discount', 0)
+            button_text = f"{code} - {discount:,} MMK discount"
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=f"admin_coupon_{code}")])
+        
+        keyboard.append([InlineKeyboardButton("🔙 Back", callback_data="back_to_admin")])
+        return InlineKeyboardMarkup(keyboard)
+    
+    @staticmethod
+    def coupon_management_actions(code: str):
+        """Coupon management actions keyboard"""
+        keyboard = [
+            [InlineKeyboardButton("✏️ Edit Discount", callback_data=f"admin_edit_coupon_{code}")],
+            [InlineKeyboardButton("❌ Delete Coupon", callback_data=f"admin_delete_coupon_{code}")],
+            [InlineKeyboardButton("🔙 Back", callback_data="admin_manage_coupons")]
+        ]
+        return InlineKeyboardMarkup(keyboard)
+    
+    @staticmethod
+    def confirm_delete_coupon_menu(code: str):
+        """Confirm delete coupon keyboard"""
+        keyboard = [
+            [InlineKeyboardButton("✅ Yes, Delete", callback_data=f"admin_confirm_delete_coupon_{code}")],
+            [InlineKeyboardButton("❌ Cancel", callback_data=f"admin_coupon_{code}")],
         ]
         return InlineKeyboardMarkup(keyboard)

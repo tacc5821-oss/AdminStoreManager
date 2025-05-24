@@ -482,6 +482,145 @@ This action cannot be undone!"""
             reply_markup=self.keyboards.back_button()
         )
     
+    async def show_coupons_management(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show coupons management list"""
+        coupons = self.db.get_all_coupons()
+        
+        if not coupons:
+            text = "❌ No coupons found. Add some coupons first!"
+            keyboard = self.keyboards.back_button()
+        else:
+            text = "🎫 Select a coupon to manage:"
+            keyboard = self.keyboards.coupons_management_menu(coupons)
+        
+        await update.callback_query.edit_message_text(
+            text=text,
+            reply_markup=keyboard
+        )
+    
+    async def show_coupon_management_actions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, code: str):
+        """Show coupon management actions"""
+        coupon = self.db.get_coupon(code)
+        
+        if not coupon:
+            text = "❌ Coupon not found."
+            keyboard = self.keyboards.back_button()
+        else:
+            text = f"""🎫 Managing Coupon
+
+🏷️ Code: {code}
+💰 Discount: {format_price(coupon['discount'])}
+📅 Created: {coupon.get('created_at', 'Unknown')[:10]}
+
+Choose an action:"""
+            keyboard = self.keyboards.coupon_management_actions(code)
+        
+        await update.callback_query.edit_message_text(
+            text=text,
+            reply_markup=keyboard
+        )
+    
+    async def start_edit_coupon_flow(self, update: Update, context: ContextTypes.DEFAULT_TYPE, code: str):
+        """Start edit coupon discount flow"""
+        admin_id = update.effective_user.id
+        coupon = self.db.get_coupon(code)
+        
+        if not coupon:
+            await update.callback_query.edit_message_text(
+                text="❌ Coupon not found.",
+                reply_markup=self.keyboards.back_button()
+            )
+            return
+        
+        self.admin_states[admin_id] = {
+            'action': 'edit_coupon_discount',
+            'coupon_code': code
+        }
+        
+        current_discount = coupon['discount']
+        
+        await update.callback_query.edit_message_text(
+            text=f"✏️ Current discount: {format_price(current_discount)}\n\nEnter new discount amount (MMK):",
+            reply_markup=self.keyboards.back_button()
+        )
+    
+    async def handle_edit_coupon(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle edit coupon discount"""
+        admin_id = update.effective_user.id
+        text = update.message.text.strip()
+        
+        if admin_id not in self.admin_states:
+            return
+        
+        state = self.admin_states[admin_id]
+        code = state['coupon_code']
+        discount = validate_positive_integer(text)
+        
+        if not discount:
+            await update.message.reply_text("❌ Invalid discount amount. Please enter a positive number:")
+            return
+        
+        coupon = self.db.get_coupon(code)
+        if not coupon:
+            await update.message.reply_text("❌ Coupon not found.")
+            del self.admin_states[admin_id]
+            return
+        
+        self.db.update_coupon_discount(code, discount)
+        
+        confirmation_text = f"""✅ Coupon discount updated!
+
+🏷️ Code: {code}
+New discount: {format_price(discount)}"""
+        
+        await update.message.reply_text(
+            confirmation_text,
+            reply_markup=self.keyboards.back_button()
+        )
+        
+        del self.admin_states[admin_id]
+    
+    async def confirm_delete_coupon(self, update: Update, context: ContextTypes.DEFAULT_TYPE, code: str):
+        """Show coupon delete confirmation"""
+        coupon = self.db.get_coupon(code)
+        
+        if not coupon:
+            text = "❌ Coupon not found."
+            keyboard = self.keyboards.back_button()
+        else:
+            text = f"""⚠️ Delete Coupon Confirmation
+
+Are you sure you want to delete this coupon?
+
+🏷️ Code: {code}
+💰 Discount: {format_price(coupon['discount'])}
+
+This action cannot be undone!"""
+            keyboard = self.keyboards.confirm_delete_coupon_menu(code)
+        
+        await update.callback_query.edit_message_text(
+            text=text,
+            reply_markup=keyboard
+        )
+    
+    async def delete_coupon(self, update: Update, context: ContextTypes.DEFAULT_TYPE, code: str):
+        """Delete coupon"""
+        coupon = self.db.get_coupon(code)
+        
+        if not coupon:
+            text = "❌ Coupon not found."
+        else:
+            success = self.db.delete_coupon(code)
+            if success:
+                text = f"✅ Coupon '{code}' has been deleted successfully!"
+            else:
+                text = "❌ Failed to delete coupon."
+        
+        await update.callback_query.edit_message_text(
+            text=text,
+            reply_markup=self.keyboards.back_button()
+        )
+    
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle admin callback queries"""
         query = update.callback_query
@@ -499,6 +638,8 @@ This action cannot be undone!"""
             await self.show_pending_orders(update, context)
         elif data == "admin_add_coupon":
             await self.start_add_coupon_flow(update, context)
+        elif data == "admin_manage_coupons":
+            await self.show_coupons_management(update, context)
         elif data.startswith("admin_user_"):
             user_id = data.replace("admin_user_", "")
             await self.show_user_management(update, context, user_id)
@@ -532,6 +673,18 @@ This action cannot be undone!"""
         elif data.startswith("admin_confirm_delete_"):
             item_id = data.replace("admin_confirm_delete_", "")
             await self.delete_item(update, context, item_id)
+        elif data.startswith("admin_coupon_"):
+            code = data.replace("admin_coupon_", "")
+            await self.show_coupon_management_actions(update, context, code)
+        elif data.startswith("admin_edit_coupon_"):
+            code = data.replace("admin_edit_coupon_", "")
+            await self.start_edit_coupon_flow(update, context, code)
+        elif data.startswith("admin_delete_coupon_"):
+            code = data.replace("admin_delete_coupon_", "")
+            await self.confirm_delete_coupon(update, context, code)
+        elif data.startswith("admin_confirm_delete_coupon_"):
+            code = data.replace("admin_confirm_delete_coupon_", "")
+            await self.delete_coupon(update, context, code)
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle text messages from admin"""
@@ -546,7 +699,9 @@ This action cannot be undone!"""
                 await self.handle_coin_management(update, context)
             elif state['action'].startswith('add_coupon_'):
                 await self.handle_add_coupon_steps(update, context)
-            elif state['action'].startswith('edit_'):
+            elif state['action'].startswith('edit_') and 'item_id' in state:
                 await self.handle_edit_item(update, context)
+            elif state['action'] == 'edit_coupon_discount':
+                await self.handle_edit_coupon(update, context)
         else:
             await update.message.reply_text("Please use the menu buttons or type /start")

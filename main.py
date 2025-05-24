@@ -14,7 +14,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Bot token from environment
-BOT_TOKEN = os.getenv('BOT_TOKEN', '8130084784:AAFpZm_WyWk596rn8HqBk7ijhrZbhtvr6gc')
+BOT_TOKEN = os.getenv('BOT_TOKEN', '8148103685:AAHY3QnChU0qsii8SlETfDjTJwKcQSdpF6Q')
 OWNER_ID = int(os.getenv('OWNER_ID', '1735522859'))
 
 class TelegramBot:

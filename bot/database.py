@@ -190,3 +190,19 @@ class Database:
     def get_all_coupons(self) -> Dict:
         """Get all coupons"""
         return self._load_json(self.coupons_file)
+    
+    def update_coupon_discount(self, code: str, new_discount: int):
+        """Update coupon discount amount"""
+        coupons = self._load_json(self.coupons_file)
+        if code.upper() in coupons:
+            coupons[code.upper()]['discount'] = max(0, new_discount)
+            self._save_json(self.coupons_file, coupons)
+    
+    def delete_coupon(self, code: str):
+        """Delete a coupon"""
+        coupons = self._load_json(self.coupons_file)
+        if code.upper() in coupons:
+            del coupons[code.upper()]
+            self._save_json(self.coupons_file, coupons)
+            return True
+        return False
