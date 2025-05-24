@@ -7,6 +7,7 @@ class Keyboards:
         """Main admin menu keyboard"""
         keyboard = [
             [InlineKeyboardButton("➕ Add Item", callback_data="admin_add_item")],
+            [InlineKeyboardButton("📝 Manage Items", callback_data="admin_manage_items")],
             [InlineKeyboardButton("👤 View Users", callback_data="admin_view_users")],
             [InlineKeyboardButton("💰 Manage Coins", callback_data="admin_manage_coins")],
             [InlineKeyboardButton("📦 View Orders", callback_data="admin_view_orders")],
@@ -113,4 +114,36 @@ class Keyboards:
     def back_button():
         """Simple back button"""
         keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
+        return InlineKeyboardMarkup(keyboard)
+    
+    @staticmethod
+    def items_management_menu(items: Dict):
+        """Items management keyboard for admin"""
+        keyboard = []
+        for item_id, item in items.items():
+            stock_text = f"({item['stock']} left)" if item['stock'] > 0 else "(Out of stock)"
+            button_text = f"{item['name']} - {item['category']} {stock_text}"
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=f"admin_item_{item_id}")])
+        
+        keyboard.append([InlineKeyboardButton("🔙 Back", callback_data="back_to_admin")])
+        return InlineKeyboardMarkup(keyboard)
+    
+    @staticmethod
+    def item_management_actions(item_id: str):
+        """Item management actions keyboard"""
+        keyboard = [
+            [InlineKeyboardButton("✏️ Edit Stock", callback_data=f"admin_edit_stock_{item_id}")],
+            [InlineKeyboardButton("💰 Edit Price", callback_data=f"admin_edit_price_{item_id}")],
+            [InlineKeyboardButton("❌ Delete Item", callback_data=f"admin_delete_{item_id}")],
+            [InlineKeyboardButton("🔙 Back", callback_data="admin_manage_items")]
+        ]
+        return InlineKeyboardMarkup(keyboard)
+    
+    @staticmethod
+    def confirm_delete_menu(item_id: str):
+        """Confirm delete item keyboard"""
+        keyboard = [
+            [InlineKeyboardButton("✅ Yes, Delete", callback_data=f"admin_confirm_delete_{item_id}")],
+            [InlineKeyboardButton("❌ Cancel", callback_data=f"admin_item_{item_id}")],
+        ]
         return InlineKeyboardMarkup(keyboard)

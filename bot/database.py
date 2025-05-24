@@ -114,6 +114,26 @@ class Database:
             items[item_id]['stock'] = max(0, new_stock)
             self._save_json(self.items_file, items)
     
+    def update_item_price(self, item_id: str, new_price: int):
+        """Update item price"""
+        items = self._load_json(self.items_file)
+        if item_id in items:
+            items[item_id]['price'] = max(0, new_price)
+            self._save_json(self.items_file, items)
+    
+    def delete_item(self, item_id: str):
+        """Delete an item"""
+        items = self._load_json(self.items_file)
+        if item_id in items:
+            del items[item_id]
+            self._save_json(self.items_file, items)
+            return True
+        return False
+    
+    def get_all_items(self) -> Dict:
+        """Get all items"""
+        return self._load_json(self.items_file)
+    
     # Order management
     def create_order(self, user_id: int, item_id: str, quantity: int = 1) -> str:
         """Create new order"""

@@ -333,6 +333,155 @@ Users can now use this coupon when purchasing items."""
             else:
                 await update.message.reply_text("❌ Invalid discount amount. Please enter a positive number:")
     
+    async def show_items_management(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show items management list"""
+        items = self.db.get_all_items()
+        
+        if not items:
+            text = "❌ No items found. Add some items first!"
+            keyboard = self.keyboards.back_button()
+        else:
+            text = "📝 Select an item to manage:"
+            keyboard = self.keyboards.items_management_menu(items)
+        
+        await update.callback_query.edit_message_text(
+            text=text,
+            reply_markup=keyboard
+        )
+    
+    async def show_item_management_actions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, item_id: str):
+        """Show item management actions"""
+        item = self.db.get_item(item_id)
+        
+        if not item:
+            text = "❌ Item not found."
+            keyboard = self.keyboards.back_button()
+        else:
+            text = f"""📝 Managing Item
+
+🎮 Name: {item['name']}
+📁 Category: {item['category']}
+💰 Price: {format_price(item['price'])}
+📦 Stock: {item['stock']}
+
+Choose an action:"""
+            keyboard = self.keyboards.item_management_actions(item_id)
+        
+        await update.callback_query.edit_message_text(
+            text=text,
+            reply_markup=keyboard
+        )
+    
+    async def start_edit_item_flow(self, update: Update, context: ContextTypes.DEFAULT_TYPE, action: str, item_id: str):
+        """Start edit item flow (stock or price)"""
+        admin_id = update.effective_user.id
+        item = self.db.get_item(item_id)
+        
+        if not item:
+            await update.callback_query.edit_message_text(
+                text="❌ Item not found.",
+                reply_markup=self.keyboards.back_button()
+            )
+            return
+        
+        self.admin_states[admin_id] = {
+            'action': f'edit_{action}',
+            'item_id': item_id
+        }
+        
+        current_value = item['stock'] if action == 'stock' else item['price']
+        field_name = "stock count" if action == 'stock' else "price (MMK)"
+        
+        await update.callback_query.edit_message_text(
+            text=f"✏️ Current {field_name}: {current_value}\n\nEnter new {field_name}:",
+            reply_markup=self.keyboards.back_button()
+        )
+    
+    async def handle_edit_item(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle edit item steps"""
+        admin_id = update.effective_user.id
+        text = update.message.text.strip()
+        
+        if admin_id not in self.admin_states:
+            return
+        
+        state = self.admin_states[admin_id]
+        item_id = state['item_id']
+        value = validate_positive_integer(text)
+        
+        if not value:
+            field = "stock count" if state['action'] == 'edit_stock' else "price"
+            await update.message.reply_text(f"❌ Invalid {field}. Please enter a positive number:")
+            return
+        
+        item = self.db.get_item(item_id)
+        if not item:
+            await update.message.reply_text("❌ Item not found.")
+            del self.admin_states[admin_id]
+            return
+        
+        if state['action'] == 'edit_stock':
+            self.db.update_item_stock(item_id, value)
+            field_name = "stock"
+        else:  # edit_price
+            self.db.update_item_price(item_id, value)
+            field_name = "price"
+        
+        confirmation_text = f"""✅ Item {field_name} updated!
+
+🎮 {item['name']}
+New {field_name}: {value if field_name == 'stock' else format_price(value)}"""
+        
+        await update.message.reply_text(
+            confirmation_text,
+            reply_markup=self.keyboards.back_button()
+        )
+        
+        del self.admin_states[admin_id]
+    
+    async def confirm_delete_item(self, update: Update, context: ContextTypes.DEFAULT_TYPE, item_id: str):
+        """Show delete confirmation"""
+        item = self.db.get_item(item_id)
+        
+        if not item:
+            text = "❌ Item not found."
+            keyboard = self.keyboards.back_button()
+        else:
+            text = f"""⚠️ Delete Confirmation
+
+Are you sure you want to delete this item?
+
+🎮 Name: {item['name']}
+📁 Category: {item['category']}
+💰 Price: {format_price(item['price'])}
+📦 Stock: {item['stock']}
+
+This action cannot be undone!"""
+            keyboard = self.keyboards.confirm_delete_menu(item_id)
+        
+        await update.callback_query.edit_message_text(
+            text=text,
+            reply_markup=keyboard
+        )
+    
+    async def delete_item(self, update: Update, context: ContextTypes.DEFAULT_TYPE, item_id: str):
+        """Delete item"""
+        item = self.db.get_item(item_id)
+        
+        if not item:
+            text = "❌ Item not found."
+        else:
+            success = self.db.delete_item(item_id)
+            if success:
+                text = f"✅ Item '{item['name']}' has been deleted successfully!"
+            else:
+                text = "❌ Failed to delete item."
+        
+        await update.callback_query.edit_message_text(
+            text=text,
+            reply_markup=self.keyboards.back_button()
+        )
+    
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle admin callback queries"""
         query = update.callback_query
@@ -340,6 +489,8 @@ Users can now use this coupon when purchasing items."""
         
         if data == "admin_add_item":
             await self.start_add_item_flow(update, context)
+        elif data == "admin_manage_items":
+            await self.show_items_management(update, context)
         elif data == "admin_view_users":
             await self.show_users_list(update, context)
         elif data == "admin_manage_coins":
@@ -366,6 +517,21 @@ Users can now use this coupon when purchasing items."""
         elif data.startswith("admin_reject_"):
             order_id = data.replace("admin_reject_", "")
             await self.process_order_action(update, context, "reject", order_id)
+        elif data.startswith("admin_item_"):
+            item_id = data.replace("admin_item_", "")
+            await self.show_item_management_actions(update, context, item_id)
+        elif data.startswith("admin_edit_stock_"):
+            item_id = data.replace("admin_edit_stock_", "")
+            await self.start_edit_item_flow(update, context, "stock", item_id)
+        elif data.startswith("admin_edit_price_"):
+            item_id = data.replace("admin_edit_price_", "")
+            await self.start_edit_item_flow(update, context, "price", item_id)
+        elif data.startswith("admin_delete_"):
+            item_id = data.replace("admin_delete_", "")
+            await self.confirm_delete_item(update, context, item_id)
+        elif data.startswith("admin_confirm_delete_"):
+            item_id = data.replace("admin_confirm_delete_", "")
+            await self.delete_item(update, context, item_id)
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle text messages from admin"""
@@ -380,5 +546,7 @@ Users can now use this coupon when purchasing items."""
                 await self.handle_coin_management(update, context)
             elif state['action'].startswith('add_coupon_'):
                 await self.handle_add_coupon_steps(update, context)
+            elif state['action'].startswith('edit_'):
+                await self.handle_edit_item(update, context)
         else:
             await update.message.reply_text("Please use the menu buttons or type /start")
