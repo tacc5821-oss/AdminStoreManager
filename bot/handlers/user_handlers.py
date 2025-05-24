@@ -177,7 +177,7 @@ You will be notified once it's processed."""
                 status = format_order_status(order['status'])
                 text += f"🎮 {item_name}\n{status}\n📅 {order['created_at'][:10]}\n\n"
         
-        await update.callback_query.edit_message_text(
+        await update.message.reply_text(
             text=text,
             reply_markup=self.keyboards.back_button()
         )
