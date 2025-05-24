@@ -36,7 +36,7 @@ class UserHandlers:
             text = "🛍️ Select a category:"
             keyboard = self.keyboards.categories_menu(categories)
         
-        await update.callback_query.edit_message_text(
+        await update.message.reply_text(
             text=text,
             reply_markup=keyboard
         )
@@ -157,7 +157,7 @@ You will be notified once it's processed."""
         else:
             text = "❌ User not found."
         
-        await update.callback_query.edit_message_text(
+        await update.message.reply_text(
             text=text,
             reply_markup=self.keyboards.back_button()
         )
