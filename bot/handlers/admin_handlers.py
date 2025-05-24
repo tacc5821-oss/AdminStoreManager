@@ -1,0 +1,384 @@
+from telegram import Update
+from telegram.ext import ContextTypes
+from bot.keyboards import Keyboards
+from bot.database import Database
+from bot.utils import format_price, format_user_mention, validate_positive_integer, format_order_status
+
+class AdminHandlers:
+    def __init__(self, database: Database):
+        self.db = database
+        self.keyboards = Keyboards()
+        self.admin_states = {}  # Track admin states for multi-step flows
+    
+    async def show_admin_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show main admin menu"""
+        text = "🔧 Admin Panel\n\nSelect an option:"
+        
+        if update.callback_query:
+            await update.callback_query.edit_message_text(
+                text=text,
+                reply_markup=self.keyboards.admin_main_menu()
+            )
+        else:
+            await update.message.reply_text(
+                text=text,
+                reply_markup=self.keyboards.admin_main_menu()
+            )
+    
+    async def start_add_item_flow(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Start the add item flow"""
+        admin_id = update.effective_user.id
+        self.admin_states[admin_id] = {
+            'action': 'add_item_category',
+            'item_data': {}
+        }
+        
+        await update.callback_query.edit_message_text(
+            text="➕ Adding New Item\n\nEnter category (e.g., MLBB, PUBG):",
+            reply_markup=self.keyboards.back_button()
+        )
+    
+    async def handle_add_item_steps(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle multi-step item addition"""
+        admin_id = update.effective_user.id
+        text = update.message.text.strip()
+        
+        if admin_id not in self.admin_states:
+            return
+        
+        state = self.admin_states[admin_id]
+        
+        if state['action'] == 'add_item_category':
+            state['item_data']['category'] = text.upper()
+            state['action'] = 'add_item_name'
+            await update.message.reply_text("Enter item name:")
+            
+        elif state['action'] == 'add_item_name':
+            state['item_data']['name'] = text
+            state['action'] = 'add_item_price'
+            await update.message.reply_text("Enter price (MMK):")
+            
+        elif state['action'] == 'add_item_price':
+            price = validate_positive_integer(text)
+            if price:
+                state['item_data']['price'] = price
+                state['action'] = 'add_item_stock'
+                await update.message.reply_text("Enter stock count:")
+            else:
+                await update.message.reply_text("❌ Invalid price. Please enter a positive number:")
+                
+        elif state['action'] == 'add_item_stock':
+            stock = validate_positive_integer(text)
+            if stock:
+                # Save item
+                item_data = state['item_data']
+                item_id = self.db.add_item(
+                    item_data['category'],
+                    item_data['name'],
+                    item_data['price'],
+                    stock
+                )
+                
+                confirmation_text = f"""✅ Item Added!
+
+Category: {item_data['category']}
+Name: {item_data['name']}
+Price: {format_price(item_data['price'])}
+Stock: {stock}
+Item ID: {item_id}"""
+                
+                await update.message.reply_text(
+                    confirmation_text,
+                    reply_markup=self.keyboards.back_button()
+                )
+                
+                # Clear state
+                del self.admin_states[admin_id]
+            else:
+                await update.message.reply_text("❌ Invalid stock count. Please enter a positive number:")
+    
+    async def show_users_list(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show list of all users"""
+        users = self.db.get_all_users()
+        
+        if not users:
+            text = "❌ No users found."
+            keyboard = self.keyboards.back_button()
+        else:
+            text = "👤 Select a user to manage:"
+            keyboard = self.keyboards.users_list_menu(users)
+        
+        await update.callback_query.edit_message_text(
+            text=text,
+            reply_markup=keyboard
+        )
+    
+    async def show_user_management(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str):
+        """Show user management options"""
+        user = self.db.get_user(int(user_id))
+        
+        if not user:
+            text = "❌ User not found."
+            keyboard = self.keyboards.back_button()
+        else:
+            username = format_user_mention(user['username'])
+            text = f"💰 Manage Coins for {username} – {format_price(user['coins'])}"
+            keyboard = self.keyboards.user_management_menu(user_id)
+        
+        await update.callback_query.edit_message_text(
+            text=text,
+            reply_markup=keyboard
+        )
+    
+    async def start_coin_management(self, update: Update, context: ContextTypes.DEFAULT_TYPE, action: str, user_id: str):
+        """Start coin add/remove flow"""
+        admin_id = update.effective_user.id
+        self.admin_states[admin_id] = {
+            'action': f'coin_{action}',
+            'target_user_id': user_id
+        }
+        
+        action_text = "add" if action == "add" else "remove"
+        await update.callback_query.edit_message_text(
+            text=f"💰 Enter amount to {action_text}:",
+            reply_markup=self.keyboards.back_button()
+        )
+    
+    async def handle_coin_management(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle coin add/remove"""
+        admin_id = update.effective_user.id
+        text = update.message.text.strip()
+        
+        if admin_id not in self.admin_states:
+            return
+        
+        state = self.admin_states[admin_id]
+        target_user_id = int(state['target_user_id'])
+        amount = validate_positive_integer(text)
+        
+        if not amount:
+            await update.message.reply_text("❌ Invalid amount. Please enter a positive number:")
+            return
+        
+        user = self.db.get_user(target_user_id)
+        if not user:
+            await update.message.reply_text("❌ User not found.")
+            del self.admin_states[admin_id]
+            return
+        
+        if state['action'] == 'coin_add':
+            self.db.update_user_coins(target_user_id, amount)
+            action_text = "added"
+        else:  # coin_remove
+            self.db.update_user_coins(target_user_id, -amount)
+            action_text = "removed"
+        
+        updated_user = self.db.get_user(target_user_id)
+        username = format_user_mention(updated_user['username'])
+        
+        confirmation_text = f"""✅ Coins {action_text}!
+
+{username} now has {format_price(updated_user['coins'])}"""
+        
+        await update.message.reply_text(
+            confirmation_text,
+            reply_markup=self.keyboards.back_button()
+        )
+        
+        del self.admin_states[admin_id]
+    
+    async def show_pending_orders(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show pending orders"""
+        orders = self.db.get_pending_orders()
+        
+        if not orders:
+            text = "📦 No pending orders."
+            keyboard = self.keyboards.back_button()
+        else:
+            text = "📦 Pending Orders:\n\nSelect an order to manage:"
+            keyboard = self.keyboards.orders_menu(orders)
+        
+        await update.callback_query.edit_message_text(
+            text=text,
+            reply_markup=keyboard
+        )
+    
+    async def show_order_detail(self, update: Update, context: ContextTypes.DEFAULT_TYPE, order_id: str):
+        """Show order details"""
+        orders = self.db.get_pending_orders()
+        order = next((o for o in orders if o['order_id'] == order_id), None)
+        
+        if not order:
+            text = "❌ Order not found or already processed."
+            keyboard = self.keyboards.back_button()
+        else:
+            item = self.db.get_item(order['item_id'])
+            user = self.db.get_user(order['user_id'])
+            
+            item_name = item['name'] if item else 'Unknown Item'
+            item_price = item['price'] if item else 0
+            username = format_user_mention(user['username']) if user else 'Unknown User'
+            
+            text = f"""📦 Order Details
+
+🆔 Order ID: {order_id}
+👤 Customer: {username}
+🎮 Item: {item_name}
+💰 Price: {format_price(item_price)}
+📅 Date: {order['created_at'][:16]}"""
+            
+            keyboard = self.keyboards.order_action_menu(order_id)
+        
+        await update.callback_query.edit_message_text(
+            text=text,
+            reply_markup=keyboard
+        )
+    
+    async def process_order_action(self, update: Update, context: ContextTypes.DEFAULT_TYPE, action: str, order_id: str):
+        """Process order confirmation or rejection"""
+        orders = self.db.get_pending_orders()
+        order = next((o for o in orders if o['order_id'] == order_id), None)
+        
+        if not order:
+            text = "❌ Order not found or already processed."
+        else:
+            item = self.db.get_item(order['item_id'])
+            user = self.db.get_user(order['user_id'])
+            
+            if action == "confirm":
+                if item and item['stock'] > 0:
+                    # Deduct coins
+                    self.db.update_user_coins(order['user_id'], -item['price'])
+                    # Reduce stock
+                    self.db.update_item_stock(order['item_id'], item['stock'] - 1)
+                    # Update order status
+                    self.db.update_order_status(order_id, 'confirmed')
+                    
+                    text = f"✅ Order {order_id} confirmed!\n\nUser coins deducted and item stock updated."
+                    
+                    # Notify user (you might want to implement this)
+                    try:
+                        await context.bot.send_message(
+                            chat_id=order['user_id'],
+                            text=f"✅ Your order {order_id} has been confirmed!\n🎮 {item['name']} is ready for delivery."
+                        )
+                    except:
+                        pass  # User might have blocked the bot
+                else:
+                    text = "❌ Cannot confirm order - item out of stock."
+            
+            else:  # reject
+                self.db.update_order_status(order_id, 'rejected')
+                text = f"❌ Order {order_id} rejected."
+                
+                # Notify user
+                try:
+                    await context.bot.send_message(
+                        chat_id=order['user_id'],
+                        text=f"❌ Your order {order_id} has been rejected.\nPlease contact support if you have questions."
+                    )
+                except:
+                    pass
+        
+        await update.callback_query.edit_message_text(
+            text=text,
+            reply_markup=self.keyboards.back_button()
+        )
+    
+    async def start_add_coupon_flow(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Start add coupon flow"""
+        admin_id = update.effective_user.id
+        self.admin_states[admin_id] = {
+            'action': 'add_coupon_code',
+            'coupon_data': {}
+        }
+        
+        await update.callback_query.edit_message_text(
+            text="🏷️ Adding New Coupon\n\nEnter coupon code (e.g., NEWYEAR):",
+            reply_markup=self.keyboards.back_button()
+        )
+    
+    async def handle_add_coupon_steps(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle add coupon steps"""
+        admin_id = update.effective_user.id
+        text = update.message.text.strip()
+        
+        if admin_id not in self.admin_states:
+            return
+        
+        state = self.admin_states[admin_id]
+        
+        if state['action'] == 'add_coupon_code':
+            state['coupon_data']['code'] = text.upper()
+            state['action'] = 'add_coupon_discount'
+            await update.message.reply_text("Enter discount amount (MMK):")
+            
+        elif state['action'] == 'add_coupon_discount':
+            discount = validate_positive_integer(text)
+            if discount:
+                # Save coupon
+                code = state['coupon_data']['code']
+                self.db.add_coupon(code, discount)
+                
+                confirmation_text = f"""🏷️ Coupon "{code}" saved – {format_price(discount)} discount
+
+Users can now use this coupon when purchasing items."""
+                
+                await update.message.reply_text(
+                    confirmation_text,
+                    reply_markup=self.keyboards.back_button()
+                )
+                
+                del self.admin_states[admin_id]
+            else:
+                await update.message.reply_text("❌ Invalid discount amount. Please enter a positive number:")
+    
+    async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle admin callback queries"""
+        query = update.callback_query
+        data = query.data
+        
+        if data == "admin_add_item":
+            await self.start_add_item_flow(update, context)
+        elif data == "admin_view_users":
+            await self.show_users_list(update, context)
+        elif data == "admin_manage_coins":
+            await self.show_users_list(update, context)
+        elif data == "admin_view_orders":
+            await self.show_pending_orders(update, context)
+        elif data == "admin_add_coupon":
+            await self.start_add_coupon_flow(update, context)
+        elif data.startswith("admin_user_"):
+            user_id = data.replace("admin_user_", "")
+            await self.show_user_management(update, context, user_id)
+        elif data.startswith("admin_add_coins_"):
+            user_id = data.replace("admin_add_coins_", "")
+            await self.start_coin_management(update, context, "add", user_id)
+        elif data.startswith("admin_remove_coins_"):
+            user_id = data.replace("admin_remove_coins_", "")
+            await self.start_coin_management(update, context, "remove", user_id)
+        elif data.startswith("admin_order_"):
+            order_id = data.replace("admin_order_", "")
+            await self.show_order_detail(update, context, order_id)
+        elif data.startswith("admin_confirm_"):
+            order_id = data.replace("admin_confirm_", "")
+            await self.process_order_action(update, context, "confirm", order_id)
+        elif data.startswith("admin_reject_"):
+            order_id = data.replace("admin_reject_", "")
+            await self.process_order_action(update, context, "reject", order_id)
+    
+    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle text messages from admin"""
+        admin_id = update.effective_user.id
+        
+        if admin_id in self.admin_states:
+            state = self.admin_states[admin_id]
+            
+            if state['action'].startswith('add_item_'):
+                await self.handle_add_item_steps(update, context)
+            elif state['action'].startswith('coin_'):
+                await self.handle_coin_management(update, context)
+            elif state['action'].startswith('add_coupon_'):
+                await self.handle_add_coupon_steps(update, context)
+        else:
+            await update.message.reply_text("Please use the menu buttons or type /start")
