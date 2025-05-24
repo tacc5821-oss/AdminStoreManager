@@ -31,10 +31,19 @@ class TelegramBot:
         # Register user if not exists
         self.database.register_user(user_id, username)
         
+        # Send welcome message
+        welcome_text = f"🎮 Welcome to @{username}\n\n🏪Osamu Gaming Items Store!🏪\n\nSelect an option:"
+        
         if is_admin(user_id):
-            await self.admin_handlers.show_admin_menu(update, context)
+            await update.message.reply_text(
+                welcome_text,
+                reply_markup=self.admin_handlers.keyboards.admin_main_menu()
+            )
         else:
-            await self.user_handlers.show_user_menu(update, context)
+            await update.message.reply_text(
+                welcome_text,
+                reply_markup=self.user_handlers.keyboards.user_main_menu()
+            )
     
     async def handle_callback(self, update, context):
         """Route callback queries to appropriate handlers"""

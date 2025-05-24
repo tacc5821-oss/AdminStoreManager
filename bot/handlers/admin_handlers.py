@@ -293,7 +293,7 @@ Item ID: {item_id}"""
             'coupon_data': {}
         }
         
-        await update.callback_query.edit_message_text(
+        await update.message.reply_text(
             text="🏷️ Adding New Coupon\n\nEnter coupon code (e.g., NEWYEAR):",
             reply_markup=self.keyboards.back_button()
         )
