@@ -830,6 +830,18 @@ class TelegramBot:
                 await query.edit_message_text(f"✅ Coupon '{coupon_code}' has been deleted successfully!")
             else:
                 await query.edit_message_text("❌ Coupon not found!")
+        
+        # Handle Back buttons
+        elif data == "back_admin":
+            await query.edit_message_text("🔙 Returned to main menu. Use the keyboard buttons below.")
+        
+        elif data == "back_user":
+            await query.edit_message_text("🔙 Returned to main menu. Use the keyboard buttons below.")
+        
+        # Handle category back navigation for users
+        elif data.startswith("category_") and not data.startswith("category_back_"):
+            # This is handled above in the category selection
+            pass
     
     def run(self):
         """Start the bot"""
