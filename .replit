@@ -25,3 +25,6 @@ args = "pip install python-telegram-bot && python main.py"
 
 [deployment]
 run = ["sh", "-c", "pip install python-telegram-bot && python main.py"]
+
+[agent]
+expertMode = true

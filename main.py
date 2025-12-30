@@ -6,7 +6,7 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboard
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 # Bot configuration
-BOT_TOKEN = os.getenv('BOT_TOKEN', '8148103685:AAHY3QnChU0qsii8SlETfDjTJwKcQSdpF6Q')
+BOT_TOKEN = os.getenv('BOT_TOKEN', '7995053218:AAHjjk02qRGrVmrGy-i-xL4vXio7m8bwaE0')
 OWNER_ID = int(os.getenv('OWNER_ID', '1735522859'))
 
 class TelegramBot:
